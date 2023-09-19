@@ -902,7 +902,7 @@ Fig3ABC<-plot_grid(plot_grid(Fig3A,NULL,Fig3B,ncol=3,labels=c("A","","B"),label_
 
 
 ```
-![](Figs/Fig3ABC.png)<!-- -->
+![](Figs/Fig3AB.png)<!-- -->
 
 ``` r
 
@@ -1369,7 +1369,7 @@ plot_grid(plot_grid(FigS1A,NULL,as.ggplot(FigS1B),rel_widths = c(1,0.1,1),labels
 
 ## Part III
 
-#### Fraction of variants shared between pools and singles
+#### FigS2 - Fraction of variants shared between pools and singles
 
 ``` r
 FigS2A<-ggplot(shared_v_unshared,aes(x=reorder(Pool_ID,pools_and_singles_all/total),y=pools_and_singles_all/total))+
@@ -1532,7 +1532,7 @@ Fig6AB<-plot_grid(Fig6A,Fig6B,ncol=1,rel_heights = c(1,1),labels=c("A","B"))
 
     ## `geom_smooth()` using formula = 'y ~ x'
 	
-![](Figs/FigS6AB.png)<!-- -->
+![](Figs/Fig6AB.png)<!-- -->
 
 ``` r
 table(regression_table$V1>0.5)
