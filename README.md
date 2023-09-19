@@ -1,11 +1,18 @@
-# GASP
-R code for the Genomic Analysis of Singles and Pools (GASP) project. Raw data can be downloaded from <figshare link>
+R code for the Genomic Analysis of Singles and Pools (GASP) project. 
+================
+### Raw data
+Raw data can be downloaded from https://doi.org/10.6084/m9.figshare.22766579.v1. 
+
+### Manuscript
+The manuscript can be found here: https://www.biorxiv.org/content/10.1101/2023.06.14.544959v1.full
 
 Comparison of genomic diversity between single and pooled Staphylococcus
 aureus colonies isolated from human colonisation cultures
 ================
-Vishnu Raghuram
-03/18/2022
+
+![](Figs/Revision_1_graphical_abstract.png)<!-- -->
+
+Author: Vishnu Raghuram
 
 ## Loading libraries
 
@@ -23,6 +30,7 @@ library(dplyr)
 library(plyr)
 library(pheatmap)
 library(RColorBrewer)
+library(viridis)
 library(cowplot)
 library(data.table)
 library(tidyr)
@@ -71,6 +79,12 @@ t.test(bactopia_report$final_qual_mean[bactopia_report$Sweep=="Single"],bactopia
     ## sample estimates:
     ## mean of x mean of y 
     ##  36.32047  36.31164
+
+``` r
+# kraken results
+kraken<-read.table("singles_and_pools_bracken.tab",header=F,sep="\t",col.names=c("Sample_ID","pool_type","name","taxid","taxlvl","kraken_assigned_reads","added_reads","new_est_reads","fraction_total_reads"))
+kraken<-merge(kraken,semaphore_id_desc,by="Sample_ID")
+```
 
 ### SNP Distances
 
@@ -135,6 +149,7 @@ mlst$ST[mlst$ST=="-"]<-"Unknown"
 
 #semaphore_id_desc<-merge(semaphore_id_desc,mlst[,c(1,12)],by="Sample_ID")
 quals<-merge(quals,mlst[,c(1,13)],by.y="Sample_ID",by.x="sample")
+quals$mixed_allele <- factor(quals$mixed_allele, levels = c("no", "yes"),labels = c("Single-ST", "Multi-ST"))
 ```
 
 ### Get random list of singles
@@ -221,7 +236,7 @@ mpileup_MAF_pooled_table<-mpileup_MAF_table[mpileup_MAF_table$Sweep=="Pooled" & 
 
 remove(mpileup_MAF_table)
 
-# Calculate alternate allele freq for pools (consider only sits with AF > 0.05)
+# Calculate alternate allele freq for pools (consider only sits with AF > 0.1)
 
 mpileup_MAF_pooled_table$actual_alt_AF<-(mpileup_MAF_pooled_table$alt_fwd+mpileup_MAF_pooled_table$alt_rev)/(mpileup_MAF_pooled_table$alt_fwd+mpileup_MAF_pooled_table$alt_rev+mpileup_MAF_pooled_table$ref_fwd+mpileup_MAF_pooled_table$ref_rev)
 mpileup_MAF_pooled_table<-mpileup_MAF_pooled_table[mpileup_MAF_pooled_table$actual_alt_AF>0.05,]
@@ -344,7 +359,7 @@ x<-append(x,max(rand_shared_v_unshared$pools_and_rand_expected/rand_shared_v_uns
 x
 ```
 
-    ## [1] 0.05043948 0.04910464 0.04995461 0.04991729 0.04883516
+    ## [1] 0.04961812 0.04991187 0.04956229 0.04756575 0.05078271
 
 ``` r
 remove(x)
@@ -375,6 +390,7 @@ remove(mean_MAF_pools)
 # Calculate average MAF for true singles
 mean_MAF_true_singles<-setDT(mpileup_MAF_singles_table)[, .(MAF_sum=sum(MAF),snp_freq = .N), by=.(Sample_ID)]
 
+#mean_MAF_true_singles<-setDT(mpileup_MAF_singles_table[!(abs((mpileup_MAF_singles_table$ref_fwd+mpileup_MAF_singles_table$alt_fwd)-(mpileup_MAF_singles_table$ref_rev+mpileup_MAF_singles_table$alt_rev))/(mpileup_MAF_singles_table$ref_fwd+mpileup_MAF_singles_table$alt_fwd+mpileup_MAF_singles_table$ref_rev+mpileup_MAF_singles_table$alt_rev)>0.5),])[, .(MAF_sum=sum(MAF),snp_freq = .N), by=.(Sample_ID)]
 mean_MAF_true_singles$true_singles_mean_MAF<-mean_MAF_true_singles$MAF_sum/mean_MAF_true_singles$snp_freq
 ```
 
@@ -480,6 +496,8 @@ instrain$Pool_type[instrain$Pool_type=="expected"]<-"eight"
 
 instrain$Pool_type<-factor(instrain$Pool_type, levels=c("pool","eight","four","two","single"))
 
+#shared_v_unshared<-(merge(instrain,mlst,by="Pool_ID"))
+
 instrain<-merge(instrain,mlst[,c(1,13)],by="Sample_ID")
 ```
 
@@ -566,6 +584,12 @@ amr_quant<-merge(amr_quant,rpod_quant[,c(1,7)],by="Sample_ID")
 amr_quant$rel_reads<-amr_quant$norm_amr_reads/amr_quant$norm_rpoD_reads
 
 amr_quant$class[amr_quant$class=="LINCOSAMIDE/STREPTOGRAMIN"]<-"STREPTOGRAMIN"
+
+#pres_in_both<-merge(pres_in_both,amr_quant,by.x=c("Pool_ID","Class"),by.y=c("Pool_ID","class"))
+#pres_in_pool_abs_in_singles<-merge(pres_in_pool_abs_in_singles,amr_quant,by.x=c("Pool_ID","Class"),by.y=c("Pool_ID","class"))
+
+
+#bb<-merge(pres_in_both[pres_in_both$Sweep=="Pooled",c(1,2,9,14,24)],pres_in_pool_abs_in_singles[pres_in_pool_abs_in_singles$Sweep=="Pooled",c(2,9,14,24)],by=c("Class","gene"))
 ```
 
 #### Abundances of AMR genes
@@ -652,22 +676,40 @@ econ_amr_pool<-pivot_longer(econ_amr_pool,names_to = "add",values_to = "new_vars
 
 # FIGURES
 
-## Part I - Variation in individual colonies
+## Part I - Variation in individual colonies (Fig 2)
 
 ### Fig2A - SNP distances
 
 ``` r
 #Per participant SNP distnace range
 Fig2A<-ggplot(data=snp_dists_all_patients[snp_dists_all_patients$Concordance=="Same site & Same time" & snp_dists_all_patients$SNPs>0,],aes(y=reorder(Pool_ID.x,SNPs,FUN=mean),x=SNPs))+
-  geom_boxplot(outlier.alpha = 1,color="black",fill="grey",outlier.size = 0.5)+
-  theme_bw()+
-  labs(x="Within collection pairwise\nSNP distances",y="")+
-  theme(panel.grid.major.x = element_blank(),panel.grid.minor.x = element_blank(),panel.grid.major.y = element_line(color="grey"))+
+  geom_boxplot(outlier.alpha = 1,color="black",fill="grey90",outlier.size = 0.5)+
+  theme_bw(base_family = "Arial")+
+  labs(x="Within collection pairwise\nSNP distances",y="Collection IDs")+
+  theme(panel.grid.major.x = element_line(color="grey"),panel.grid.minor.x = element_blank(),panel.grid.major.y = element_blank())+
   theme(axis.text.y=element_blank())+
   theme(axis.text.x=element_text(color="black",size=16))+
-  theme(axis.title.x=element_text(color="black",size=16,face="bold"))+
-  scale_x_continuous(breaks=c(1,10,100,1000,10000),trans='log10')
+  theme(axis.title=element_text(color="black",size=16,face="bold"))+
+  theme(axis.ticks.x = element_line(color="black",size=1))+
+  scale_x_continuous(breaks=c(1,10,100,1000,10000),trans='log10')+
+  theme(axis.ticks.length.x = unit(0.25,"cm"))
 
+# Statistical comparisons of SNP distance distributions across body sites and timepoints
+compare_means(SNPs ~ Concordance,data=snp_dists_all_patients)
+```
+
+    ## # A tibble: 6 × 8
+    ##   .y.   group1                group2          p     p.adj p.for…¹ p.sig…² method
+    ##   <chr> <chr>                 <chr>       <dbl>     <dbl> <chr>   <chr>   <chr> 
+    ## 1 SNPs  Diff site & Same time Same s… 0         0         <2e-16  ****    Wilco…
+    ## 2 SNPs  Diff site & Same time Same s… 2.42e- 87 2.4 e- 87 <2e-16  ****    Wilco…
+    ## 3 SNPs  Diff site & Same time Diff s… 0         0         <2e-16  ****    Wilco…
+    ## 4 SNPs  Same site & Same time Same s… 0         0         <2e-16  ****    Wilco…
+    ## 5 SNPs  Same site & Same time Diff s… 0         0         <2e-16  ****    Wilco…
+    ## 6 SNPs  Same site & Diff time Diff s… 7.68e-241 1.50e-240 <2e-16  ****    Wilco…
+    ## # … with abbreviated variable names ¹​p.format, ²​p.signif
+
+``` r
 # Per collection max SNP dist
 max_snp_dist<-aggregate(snp_dists_all_patients$SNPs[snp_dists_all_patients$Concordance=="Same site & Same time"],list(snp_dists_all_patients$Pool_ID.x[snp_dists_all_patients$Concordance=="Same site & Same time"]),FUN=max)
 
@@ -680,7 +722,7 @@ large_snp_dist_pools<-max_snp_dist$Group.1[max_snp_dist$x>2800]
 # Distribution of MLST types across all samples
 Fig2B<-ggplot(data=mlst[mlst$Sweep=="Single",],aes(y=forcats::fct_infreq(ST)))+
   geom_bar(stat="count",color="black",fill="white",width=0.3,size=1)+
-  theme_bw() + 
+  theme_bw(base_family = "Arial") + 
   theme(axis.text.y = element_text(angle=0,size = 16,vjust=0.4,color="black",face="bold"),axis.text.x=element_text(size=12,vjust=0.4)) +
   theme(axis.title.x=element_text(size=16,vjust=1,face="bold",color="black")) +
   theme(axis.title.y=element_text(size=16,vjust=1,face="bold",color="black")) +
@@ -694,11 +736,11 @@ x<-as.data.frame(table(count(count(mlst[,c(3,11)])$Pool_ID)$freq))
 # Plotting number of ST types per pool ID
 Fig2C<-ggplot(data=x,aes(x=as.factor(Var1),y=Freq))+
   geom_bar(stat="identity",color="black",fill="white",width=0.3,size=1)+
-  theme_bw() + 
+  theme_bw(base_family = "Arial") + 
   theme(axis.text.x = element_text(size = 16,vjust=0.4,color="black",face="bold"),axis.text.y=element_text(size=16,vjust=0.4))+
   theme(axis.title.y=element_text(size=12,vjust=1)) +
   theme(axis.title.x=element_text(size=12,vjust=-1)) +
-  labs(x="No. of STs per collection",y="Count",tag="C")+
+  labs(x="No. of STs per\ncollection",y="Count",tag="C")+
   theme(plot.tag=element_text(size=16,color="black",face="bold"))
 
 
@@ -716,13 +758,10 @@ remove(x)
 chisq_test(table(mlst[mlst$Sweep=="Pooled" & !mlst$Pool_ID %in% mismatched_pools_singles_Pool_IDs,c(5,13)]))
 ```
 
-<div data-pagedtable="false">
-
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["n"],"name":[1],"type":["int"],"align":["right"]},{"label":["statistic"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["p"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["df"],"name":[4],"type":["int"],"align":["right"]},{"label":["method"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p.signif"],"name":[6],"type":["chr"],"align":["left"]}],"data":[{"1":"224","2":"2.843991","3":"0.584","4":"4","5":"Chi-square test","6":"ns","_rn_":"1"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
-  </script>
-
-</div>
+    ## # A tibble: 1 × 6
+    ##       n statistic     p    df method          p.signif
+    ## * <int>     <dbl> <dbl> <int> <chr>           <chr>   
+    ## 1   224      2.84 0.584     4 Chi-square test ns
 
 ``` r
 table(mlst[mlst$Sweep=="Pooled" & !mlst$Pool_ID %in% mismatched_pools_singles_Pool_IDs,c(5,13)])
@@ -740,13 +779,10 @@ table(mlst[mlst$Sweep=="Pooled" & !mlst$Pool_ID %in% mismatched_pools_singles_Po
 chisq_test(table(mlst[mlst$Sweep=="Pooled" & !mlst$Pool_ID %in% mismatched_pools_singles_Pool_IDs,c(6,13)]))
 ```
 
-<div data-pagedtable="false">
-
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["n"],"name":[1],"type":["int"],"align":["right"]},{"label":["statistic"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["p"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["df"],"name":[4],"type":["int"],"align":["right"]},{"label":["method"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p.signif"],"name":[6],"type":["chr"],"align":["left"]}],"data":[{"1":"224","2":"7.22224","3":"0.027","4":"2","5":"Chi-square test","6":"*","_rn_":"1"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
-  </script>
-
-</div>
+    ## # A tibble: 1 × 6
+    ##       n statistic     p    df method          p.signif
+    ## * <int>     <dbl> <dbl> <int> <chr>           <chr>   
+    ## 1   224      7.22 0.027     2 Chi-square test *
 
 ``` r
 table(mlst[mlst$Sweep=="Pooled" & !mlst$Pool_ID %in% mismatched_pools_singles_Pool_IDs,c(6,13)])
@@ -762,13 +798,10 @@ table(mlst[mlst$Sweep=="Pooled" & !mlst$Pool_ID %in% mismatched_pools_singles_Po
 chisq_test(table(mlst[mlst$Sweep=="Pooled" & !mlst$Pool_ID %in% mismatched_pools_singles_Pool_IDs,c(7,13)]))
 ```
 
-<div data-pagedtable="false">
-
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["n"],"name":[1],"type":["int"],"align":["right"]},{"label":["statistic"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["p"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["df"],"name":[4],"type":["int"],"align":["right"]},{"label":["method"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p.signif"],"name":[6],"type":["chr"],"align":["left"]}],"data":[{"1":"224","2":"2.153018","3":"0.142","4":"1","5":"Chi-square test","6":"ns","_rn_":"1"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
-  </script>
-
-</div>
+    ## # A tibble: 1 × 6
+    ##       n statistic     p    df method          p.signif
+    ## * <int>     <dbl> <dbl> <int> <chr>           <chr>   
+    ## 1   224      2.15 0.142     1 Chi-square test ns
 
 ``` r
 table(mlst[mlst$Sweep=="Pooled" & !mlst$Pool_ID %in% mismatched_pools_singles_Pool_IDs,c(7,13)])
@@ -782,7 +815,8 @@ table(mlst[mlst$Sweep=="Pooled" & !mlst$Pool_ID %in% mismatched_pools_singles_Po
 ### Fig 2D - Phylogeny
 
 ``` r
-tree<-read.tree("parsnp.tree")
+tree<-read.tree("maskrc_output.treefile")
+tree$tip.label<-gsub(".fna","",tree$tip.label)
 tree<-drop.tip(tree,"S.191014.00070.ref")
 
 mlst_ref<-mlst[,c(1,2)]
@@ -799,10 +833,10 @@ Fig2D<-ggtree(tree,layout="circular",branch.length = "none",size=0.7,color="grey
   scale_color_manual("ST",values=c(brewer.pal(8,"Set1"),"turquoise","lightslateblue","grey83"))+
   theme(legend.box.margin = margin(0,0,0,0),plot.margin=unit(c(0,0,0,0), 'cm'),legend.position = "right")
 
-plot_grid(Fig2A,NULL,plot_grid(Fig2BC,Fig2D,nrow=2,rel_heights = c(1,1),labels=c("B","D")),nrow=1,labels=c("A"),rel_widths = c(1,0.05,1))
-```
+Fig2ABCD<-plot_grid(Fig2A,NULL,plot_grid(Fig2BC,Fig2D,nrow=2,rel_heights = c(1,1),labels=c("B","D")),nrow=1,labels=c("A"),rel_widths = c(1,0.05,1))
 
-![](Figs/Fig2.png)<!-- -->
+```
+![](Figs/Fig2ABCD.png)<!-- -->
 
 ## Part II
 
@@ -814,36 +848,42 @@ Fig3A<-ggplot(data=quals,aes(x=Sweep,y=final_coverage,fill=Sweep))+
   geom_jitter(aes(shape=mixed_allele),color="black",binaxis="y",stackdir = "center",size = 2,width=0.1,alpha=0.4)+
   scale_shape_manual(values=c(21,25))+
   geom_violin(color="black",width=0.3,size=1,outlier.size=-1,fill="white",alpha=0)+
+  facet_wrap(.~mixed_allele)+
   scale_fill_manual(values=c("darkred","white"))+
-  theme_bw() + 
-  theme(axis.text.x = element_text(angle=0,size = 12,vjust=0.4,color="black",face="bold"),axis.text.y=element_text(size=16,vjust=0.4)) +
+  theme_bw(base_family = "Arial") + 
+  theme(axis.text.x = element_text(angle=0,size = 16,vjust=0.4,color="black",face="bold"),axis.text.y=element_text(size=16,vjust=0.4)) +
   theme(axis.title.y=element_text(size=16,vjust=1)) +
+  theme(strip.text.x = element_text(size = 16,face="bold"))+
   theme(legend.position = "none")+
-  labs(x="",y="Final Coverage")
+  labs(x="",y="Final Coverage")+
+  theme(plot.margin = unit(c(1,1,1,1), "cm"))
 
 
 #No. of contigs
 Fig3B<-ggplot(data=quals,aes(x=Sweep,y=total_contig,fill=Sweep))+
   geom_jitter(aes(shape=mixed_allele),color="black",binaxis="y",stackdir = "center",size = 2,width=0.1,alpha=0.4)+
   scale_shape_manual(values=c(21,25))+
+  facet_wrap(.~mixed_allele)+
   geom_violin(color="black",width=0.3,size=1,outlier.size=-1,fill="white",alpha=0)+
   scale_fill_manual(values=c("darkred","white"))+
-  theme_bw() + 
-  theme(axis.text.x = element_text(angle=0,size = 12,vjust=0.4,color="black",face="bold"),axis.text.y=element_text(size=16,vjust=0.4)) +
-  theme(axis.title.y=element_text(size=16,vjust=1)) +
+  theme_bw(base_family = "Arial") + 
+  theme(axis.text.x = element_text(angle=0,size = 16,vjust=0.4,color="black",face="bold"),axis.text.y=element_text(size=16,vjust=0.4)) +
+  theme(axis.title.y=element_text(size=16,margin=margin(0,20,0,0))) +
   theme(legend.position = "none")+
-  labs(x="",y="Number of contigs")
+  theme(strip.text.x = element_text(size = 16,face="bold"))+
+  labs(x="",y="Number of contigs")+
+  theme(plot.margin = unit(c(1,1,1,0), "cm"))
 
 
 Fig3C<-ggplot(data=quals,aes(x=checkm_contamination,y=checkm_heterogeneity,fill=Sweep))+
   geom_point(aes(shape=mixed_allele),size=3,color="black",alpha=0.4,stroke=1.5)+
   scale_shape_manual("",values=c(21,25),labels=c("Multi-ST collection","Single-ST collection"))+
   scale_fill_manual("",values=c("darkred","white"))+
-  theme_bw() + 
+  theme_bw(base_family = "Arial") + 
   theme(axis.text.x = element_text(angle=45,size = 12,vjust=0.4,color="black"),axis.text.y=element_text(size=16,vjust=0.4)) +
   theme(axis.title.y=element_text(size=16,vjust=1)) +
   theme(axis.title.x=element_text(size=16,vjust=1))+
-  theme(legend.position = "bottom",legend.key.size = unit(0.7, 'cm'),legend.box.margin = margin(0,0,0,0),legend.background = element_blank(),legend.text = element_text(size=12),legend.spacing = unit(1,'cm'))+
+  theme(legend.position = "bottom",legend.key.size = unit(1, 'cm'),legend.box.margin = margin(0,20,0,0),legend.background = element_blank(),legend.text = element_text(size=16),legend.spacing = unit(1,'cm'),legend.box.background = element_rect(colour = "black"))+
   guides(shape=guide_legend(nrow=2, byrow=TRUE))+
   guides(fill=guide_legend(nrow=2, byrow=TRUE))+
   labs(x="CheckM Contamination",y="CheckM Heterogeneity")+
@@ -853,19 +893,20 @@ Fig3C<-ggplot(data=quals,aes(x=checkm_contamination,y=checkm_heterogeneity,fill=
   geom_ysidehistogram(position = "stack",color="black") +
   theme(ggside.panel.scale = .15)+
   scale_xsidey_continuous(breaks=pretty_breaks(n=2))+
-  scale_ysidex_continuous(breaks=pretty_breaks(n=2))
+  scale_ysidex_continuous(breaks=pretty_breaks(n=2))+
+  theme(plot.margin = unit(c(1,1,1,1), "cm"))
 
   
 
-plot_grid(plot_grid(Fig3A,Fig3B,ncol=2,labels=c("A","B")),Fig3C,nrow=2,ncol=1,rel_heights = c(1,1.35),labels=c("","C"),label_x = -0.01)
+Fig3ABC<-plot_grid(plot_grid(Fig3A,NULL,Fig3B,ncol=3,labels=c("A","","B"),label_size = 16,nrow=1,rel_widths = c(1,0.05,1)),Fig3C,nrow=2,ncol=1,rel_heights = c(1,1.35),labels=c("","C"),label_size = 16)
+
+
 ```
-
-    ## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
-    ## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
-
-![](Figs/Fig3.png)<!-- -->
+![](Figs/Fig3ABC.png)<!-- -->
 
 ``` r
+
+
 wilcox.test(final_coverage~Sweep,quals)
 ```
 
@@ -873,20 +914,17 @@ wilcox.test(final_coverage~Sweep,quals)
     ##  Wilcoxon rank sum test with continuity correction
     ## 
     ## data:  final_coverage by Sweep
-    ## W = 233703, p-value = 0.0128
+    ## W = 233702, p-value = 0.0128
     ## alternative hypothesis: true location shift is not equal to 0
 
 ``` r
 wilcox_effsize(quals,final_coverage~Sweep)
 ```
 
-<div data-pagedtable="false">
-
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":[".y."],"name":[1],"type":["chr"],"align":["left"]},{"label":["group1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["group2"],"name":[3],"type":["chr"],"align":["left"]},{"label":["effsize"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["n1"],"name":[5],"type":["int"],"align":["right"]},{"label":["n2"],"name":[6],"type":["int"],"align":["right"]},{"label":["magnitude"],"name":[7],"type":["ord"],"align":["right"]}],"data":[{"1":"final_coverage","2":"Pooled","3":"Single","4":"0.05206702","5":"254","6":"2032","7":"small","_rn_":"1"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
-  </script>
-
-</div>
+    ## # A tibble: 1 × 7
+    ##   .y.            group1 group2 effsize    n1    n2 magnitude
+    ## * <chr>          <chr>  <chr>    <dbl> <int> <int> <ord>    
+    ## 1 final_coverage Pooled Single  0.0521   254  2032 small
 
 ``` r
 wilcox.test(total_contig~Sweep,quals)
@@ -896,20 +934,17 @@ wilcox.test(total_contig~Sweep,quals)
     ##  Wilcoxon rank sum test with continuity correction
     ## 
     ## data:  total_contig by Sweep
-    ## W = 355689, p-value < 2.2e-16
+    ## W = 355688, p-value < 2.2e-16
     ## alternative hypothesis: true location shift is not equal to 0
 
 ``` r
 wilcox_effsize(quals,total_contig~Sweep)
 ```
 
-<div data-pagedtable="false">
-
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":[".y."],"name":[1],"type":["chr"],"align":["left"]},{"label":["group1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["group2"],"name":[3],"type":["chr"],"align":["left"]},{"label":["effsize"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["n1"],"name":[5],"type":["int"],"align":["right"]},{"label":["n2"],"name":[6],"type":["int"],"align":["right"]},{"label":["magnitude"],"name":[7],"type":["ord"],"align":["right"]}],"data":[{"1":"total_contig","2":"Pooled","3":"Single","4":"0.2059395","5":"254","6":"2032","7":"small","_rn_":"1"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
-  </script>
-
-</div>
+    ## # A tibble: 1 × 7
+    ##   .y.          group1 group2 effsize    n1    n2 magnitude
+    ## * <chr>        <chr>  <chr>    <dbl> <int> <int> <ord>    
+    ## 1 total_contig Pooled Single   0.206   254  2032 small
 
 ``` r
 wilcox.test(checkm_contamination~Sweep,quals)
@@ -919,20 +954,17 @@ wilcox.test(checkm_contamination~Sweep,quals)
     ##  Wilcoxon rank sum test with continuity correction
     ## 
     ## data:  checkm_contamination by Sweep
-    ## W = 327207, p-value < 2.2e-16
+    ## W = 327206, p-value < 2.2e-16
     ## alternative hypothesis: true location shift is not equal to 0
 
 ``` r
 wilcox_effsize(quals,checkm_contamination~Sweep)
 ```
 
-<div data-pagedtable="false">
-
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":[".y."],"name":[1],"type":["chr"],"align":["left"]},{"label":["group1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["group2"],"name":[3],"type":["chr"],"align":["left"]},{"label":["effsize"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["n1"],"name":[5],"type":["int"],"align":["right"]},{"label":["n2"],"name":[6],"type":["int"],"align":["right"]},{"label":["magnitude"],"name":[7],"type":["ord"],"align":["right"]}],"data":[{"1":"checkm_contamination","2":"Pooled","3":"Single","4":"0.2386289","5":"254","6":"2032","7":"small","_rn_":"1"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
-  </script>
-
-</div>
+    ## # A tibble: 1 × 7
+    ##   .y.                  group1 group2 effsize    n1    n2 magnitude
+    ## * <chr>                <chr>  <chr>    <dbl> <int> <int> <ord>    
+    ## 1 checkm_contamination Pooled Single   0.239   254  2032 small
 
 ``` r
 wilcox.test(checkm_heterogeneity~Sweep,quals)
@@ -949,13 +981,10 @@ wilcox.test(checkm_heterogeneity~Sweep,quals)
 wilcox_effsize(quals,checkm_heterogeneity~Sweep)
 ```
 
-<div data-pagedtable="false">
-
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":[".y."],"name":[1],"type":["chr"],"align":["left"]},{"label":["group1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["group2"],"name":[3],"type":["chr"],"align":["left"]},{"label":["effsize"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["n1"],"name":[5],"type":["int"],"align":["right"]},{"label":["n2"],"name":[6],"type":["int"],"align":["right"]},{"label":["magnitude"],"name":[7],"type":["ord"],"align":["right"]}],"data":[{"1":"checkm_heterogeneity","2":"Pooled","3":"Single","4":"0.3474474","5":"254","6":"2032","7":"moderate","_rn_":"1"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
-  </script>
-
-</div>
+    ## # A tibble: 1 × 7
+    ##   .y.                  group1 group2 effsize    n1    n2 magnitude
+    ## * <chr>                <chr>  <chr>    <dbl> <int> <int> <ord>    
+    ## 1 checkm_heterogeneity Pooled Single   0.347   254  2032 moderate
 
 ### Fig4A - Average MAF
 
@@ -965,6 +994,7 @@ pd <- position_dodge(0.04)
 # This plot shows that some singles also have intermediate AFs though they are from "pure" single colonies 
 
 Fig4A<-ggplot(data=shared_v_unshared[!shared_v_unshared$Pool_ID %in% mismatched_pools_singles_Pool_IDs,],aes(x=Pools,y=actual_mean_MAF))+
+  #geom_point(data=mean_MAF_true_singles,aes(x=snp_freq,y=true_singles_mean_MAF),size=3,color="black",fill="white",alpha=0.4,shape=21)+
   geom_point(aes(size=Pools*actual_mean_MAF,shape=mixed_allele),color="black",fill="darkred",alpha=0.4)+
   scale_shape_manual("",values=c(21,25),labels=c("Single-ST collection","Multi-ST collection"))+
   theme_bw()+
@@ -1030,6 +1060,7 @@ x<-ggplot(data=instrain,aes(x=Pool_type,y=nucl_diversity,group=Pool_ID,fill=Pool
   scale_x_discrete(limits=c("pool","eight","four","two","single"),labels=c(pool="Pool",eight="Expected\npool",four="Four",two="Two",single="Single"))+
   theme(axis.title.y = element_text(size=16,color="black",face="bold",margin = margin(t = 0, r = 20, b = 0, l = 0)))+
   labs(x="",y="InStrain\nNucleotide Diversity")+
+  #geom_hline(yintercept = mean(instrain$nucl_diversity[instrain$Pool_type=="single"]),color="black")+ #avg single
   geom_hline(yintercept = 0.0006620757637352,color="black",linetype="solid")+ #99:01
   annotate("text", x=5.2, y=0.0007620757637352, label="99:01", size=5, color="black") +
   geom_hline(yintercept = 0.0023543536257754,color="black",linetype="solid")+ #90:10
@@ -1043,25 +1074,27 @@ x<-ggplot(data=instrain,aes(x=Pool_type,y=nucl_diversity,group=Pool_ID,fill=Pool
 y<-ggplot(data=instrain,aes(y=nucl_diversity,fill=Pool_type))+
   geom_histogram(color="black",bins=30)+
   scale_fill_manual(name="Pool type",values=c("darkred","salmon","rosybrown3","mistyrose2","white"),labels=c(pool="Pool",eight="Expected\npool",four="Four",two="Two",single="Single"))+
-   theme_bw()+
-  theme(axis.text.x=element_text(size=8))+
+   theme_bw(base_family = "Product Sans")+
+  theme(axis.text.x=element_text(size=1))+
   theme(axis.text.y=element_blank())+
   theme(axis.title.y=element_blank())+
   scale_x_continuous(breaks=pretty_breaks(n=2))+
+  #theme(axis.title.x=element_text(size=16,color="black",face="bold"))+
   theme(axis.title.x=element_blank())+
+  #theme(legend.position = c(0.80, 0.75),legend.text=element_text(size=16),legend.key.size = unit(0.8, 'cm'),legend.title = element_blank())+
   theme(legend.position = "right")
+  #ylim(-0.00015,0.006)
   
 
 Fig4B<-plot_grid(x,y,rel_widths = c(1,0.35),align="hv",axis="bt",nrow=1)
-plot_grid(Fig4A,NULL,Fig4B,ncol=1,rel_heights = c(1,0.1,1),labels=c("A","B"))
+
+Fig4AB<-plot_grid(Fig4A,NULL,Fig4B,ncol=1,rel_heights = c(1,0.1,1),labels=c("A","B"),label_size = 16)
 ```
-
-    ## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
-    ## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
-
-![](Figs/Fig4.png)<!-- -->
+![](Figs/Fig4AB.png)<!-- -->
 
 ``` r
+
+
 #remove(x,y)
 
 
@@ -1160,7 +1193,7 @@ comparison_pca<-comparison[,c(3,5,6,7,8)]
 
 ``` r
 log_reg_data<-merge(comparison,semaphore_id_desc[semaphore_id_desc$Sweep=="Pooled",c(1,3,4,5,9)],by="Sample_ID")
-
+#log_reg_data<-log_reg_data[!(log_reg_data$Pool_ID %in% mismatched_pools_singles_Pool_IDs),]
 log_reg_data<-merge(log_reg_data,mlst[,c(1,13)])
 log_reg_data$mixed_allele<-ifelse(log_reg_data$mixed_allele=="yes",1,0)
 log_reg_data$mixed_allele[log_reg_data$Pool_ID %in% large_snp_dist_pools]<-1
@@ -1174,10 +1207,7 @@ test <- log_reg_data[!sample, ]
 log_reg_model<-glm(mixed_allele~`MAF Index` + `Number of contigs` + `CheckM Contamination` + `CheckM Heterogeneity`+`Nucleotide Diversity`,family="binomial",data=train)
 ```
 
-    ## Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred
-
 ``` r
-# Use this instead of above to include AMR finder results (No difference)
 #log_reg_model<-glm(mixed_allele~`MAF Index` + `Number of contigs` + `CheckM Contamination` + `CheckM Heterogeneity`+`Nucleotide Diversity`+`AMR Classes`,family="binomial",data=train)
 
 pscl::pR2(log_reg_model)["McFadden"]
@@ -1192,13 +1222,12 @@ pscl::pR2(log_reg_model)["McFadden"]
 varImp(log_reg_model)
 ```
 
-<div data-pagedtable="false">
-
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Overall"],"name":[1],"type":["dbl"],"align":["right"]}],"data":[{"1":"0.85827013","_rn_":"`MAF Index`"},{"1":"3.26569616","_rn_":"`Number of contigs`"},{"1":"0.09608893","_rn_":"`CheckM Contamination`"},{"1":"1.50673624","_rn_":"`CheckM Heterogeneity`"},{"1":"3.56911041","_rn_":"`Nucleotide Diversity`"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
-  </script>
-
-</div>
+    ##                           Overall
+    ## `MAF Index`            0.85827013
+    ## `Number of contigs`    3.26569616
+    ## `CheckM Contamination` 0.09608893
+    ## `CheckM Heterogeneity` 1.50673624
+    ## `Nucleotide Diversity` 3.56911041
 
 ``` r
 car::vif(log_reg_model)
@@ -1317,6 +1346,8 @@ FigS1A<-ggplot(data=pca_plot,aes(x=PC1,y=PC2,fill=Sweep,color=Sweep))+
   theme(legend.text = element_text(size=16))+
   xlab(paste("PC1 - ",round(comparison_var[1],digits = 4)*100,"%"))+
   ylab(paste("PC2 - ",round(comparison_var[2],digits = 4)*100,"%"))+
+  #geom_xsidedensity(aes(y=stat(density)),alpha=0.5,position = position_dodge(width=0.5)) +
+  #geom_ysidedensity(aes(x=stat(density)),alpha=0.5,position = position_dodge(width=0.5)) +
   theme_ggside_bw()+
   geom_xsidehistogram(position = "stack",color="black",binwidth = 1) +
   geom_ysidehistogram(position = "stack",color="black",binwidth=1) +
@@ -1338,7 +1369,7 @@ plot_grid(plot_grid(FigS1A,NULL,as.ggplot(FigS1B),rel_widths = c(1,0.1,1),labels
 
 ## Part III
 
-#### FigS2 - Fraction of variants shared between pools and singles
+#### Fraction of variants shared between pools and singles
 
 ``` r
 FigS2A<-ggplot(shared_v_unshared,aes(x=reorder(Pool_ID,pools_and_singles_all/total),y=pools_and_singles_all/total))+
@@ -1349,6 +1380,7 @@ FigS2A<-ggplot(shared_v_unshared,aes(x=reorder(Pool_ID,pools_and_singles_all/tot
   theme(axis.text.y=element_text(size=16,color="black"))+
   theme(axis.title.y=element_text(size=12,face="bold",color="black"))+
   geom_vline(xintercept = 30.5, color="black")+
+  #geom_vline(xintercept = 102, color="red")+
   xlab("Collection")+
   ylab("Fraction of variants shared\nbetween singles and pools")
 
@@ -1376,7 +1408,7 @@ plot_grid(FigS2A,FigS2B,ncol=1,labels=c("A","B"))
 
 ``` r
 a<-ggplot(shared_v_unshared[!shared_v_unshared$Pool_ID %in% mismatched_pools_singles_Pool_IDs,],aes(x=reorder(Pool_ID,Pools/total),y=Pools/total))+geom_bar(stat="identity",fill="darkred",color="black")+ylim(0,1)+
-  ylab("Pools\n")+
+  ylab("\nPools")+
   theme_bw()+
   theme(axis.text.x=element_blank(),axis.title.x=element_blank())+
   theme(axis.title.y=element_text(size=14,color="black",face="bold"))+
@@ -1411,7 +1443,7 @@ e<-ggplot(shared_v_unshared[!shared_v_unshared$Pool_ID %in% mismatched_pools_sin
   theme(axis.text.y=element_text(size=12,color="black"))
 
 
-Fig5A<-plot_grid(a,b,c,d,e,ncol=1)
+Fig5A<-plot_grid(a,b,c,d,e,ncol=1)+theme(plot.margin = unit(c(1,1,1,1), "cm"))
 ```
 
 ### Fig 5B - Probability of detecting variant in pool given the variant is seen in x singles
@@ -1420,24 +1452,27 @@ Fig5A<-plot_grid(a,b,c,d,e,ncol=1)
 Fig5B<-ggplot(data=mpileup_expected_AF[!mpileup_expected_AF$Pool_ID %in% mismatched_pools_singles_Pool_IDs,])+
   geom_boxplot(aes(x=as.factor(expected_allele_freq),y=actual_alt_AF),width=0.33,size=1,fill="grey75",color="black",outlier.colour = "black",outlier.fill = "white",outlier.shape = 21,outlier.alpha = 0.5)+
   scale_x_discrete(labels=c("0","1","2","3","4","5","6","7","8"))+
+  #geom_smooth(method=lm,aes(x=(expected_allele_freq*8)+1,y=actual_alt_AF))+
   theme_bw()+
   theme(axis.text.y=element_text(size=16,color="black"))+
   theme(axis.text.x=element_text(size=16,color="black"))+
-  theme(axis.title.x=element_text(size=16,face="bold",color="black",margin=margin(t = 20, r = 0, b = 0, l = 0)))+
-  theme(axis.title.y=element_text(size=16,face="bold",color="black",margin=margin(t = 0, r = 20, b = 0, l = 0)))+
+  theme(axis.title.x=element_text(size=16,face="bold",color="black",margin(t = 40, r = 0, b = 0, l = 0)))+
+  theme(axis.title.y=element_text(size=16,face="bold",color="black",margin(t = 0, r = 40, b = 0, l = 0)))+
   xlab("Number of singles a given variant is present in")+
-  ylab("Allele frequency in pool")
+  ylab("Allele frequency in pool")+
+  theme(plot.margin = unit(c(1,1,1,1), "cm"))
+```
 
+``` r
 cor(mpileup_expected_AF$actual_alt_AF[!mpileup_expected_AF$Pool_ID %in% mismatched_pools_singles_Pool_IDs & !(mpileup_expected_AF$expected_allele_freq==1 & mpileup_expected_AF$actual_alt_AF<0.9)],mpileup_expected_AF$expected_allele_freq[ !mpileup_expected_AF$Pool_ID %in% mismatched_pools_singles_Pool_IDs & !(mpileup_expected_AF$expected_allele_freq==1 & mpileup_expected_AF$actual_alt_AF<0.9)],method = "pearson")
 ```
 
     ## [1] 0.8284477
 
 ``` r
-plot_grid(Fig5A,NULL,Fig5B,ncol=1,rel_heights = c(1,0.1,0.7),labels=c("A","","B"))
+Fig5AB<-plot_grid(Fig5A,NULL,Fig5B,ncol=1,rel_heights = c(1,0.05,0.7),labels=c("A","","B"))
 ```
-
-![](GFigs/Fig5.png)<!-- -->
+![](Figs/Fig5AB.png)<!-- -->
 
 ## Part IV
 
@@ -1457,7 +1492,8 @@ Fig6A<-ggplot(data=shared_v_unshared[!shared_v_unshared$Pool_ID %in% mismatched_
   theme(axis.title.x=element_text(size=16,face="bold",color="black"))+
   theme(axis.title.y=element_text(size=16,face="bold",color="black"))+
   labs(x="Estimated segregating sites\nfrom collections",y="Estiamted segregating sites\nfrom pools")+
-  annotate("text", x=1500, y=3500, label= paste("r = ",round(cor_value,digits = 3),sep=""),size=5)
+  annotate("text", x=1500, y=3500, label= paste("r = ",round(cor_value,digits = 3),sep=""),size=5)+
+  theme(plot.margin = unit(c(1,1,1,1), "cm"))
 ```
 
 ### Fig 6B - Histogram of R2 values
@@ -1478,6 +1514,7 @@ for (i in unique(semaphore_id_desc$Pool_ID[!semaphore_id_desc$Pool_ID %in% misma
   testdata<-mpileup_expected_AF[mpileup_expected_AF$Pool_ID==testid & (mpileup_expected_AF$expected_allele_freq>0 & mpileup_expected_AF$actual_alt_AF>0) & !(mpileup_expected_AF$expected_allele_freq==1 & mpileup_expected_AF$actual_alt_AF<0.9),]
   
   regression_table<-rbind(regression_table,(ddply(testdata,c("Pool_ID"),lm_eqn)))
+  #colnames(regression_table)<-c("Site","Time","Patient_ID","R2")
   
 }
 Fig6B<-ggplot(data=regression_table)+
@@ -1487,14 +1524,15 @@ Fig6B<-ggplot(data=regression_table)+
   theme(axis.text=element_text(color="black",size=16))+
   theme(axis.title=element_text(color="black",size=16,face="bold"))+
   labs(x="Pearson r",y="Counts")+
-  xlim(-1,1)
+  xlim(-1,1)+
+  theme(plot.margin = unit(c(1,1,1,1), "cm"))
 
-plot_grid(Fig6A,NULL,Fig6B,ncol=1,rel_heights = c(1,0.1,1),labels=c("A","B"))
+Fig6AB<-plot_grid(Fig6A,Fig6B,ncol=1,rel_heights = c(1,1),labels=c("A","B"))
 ```
 
     ## `geom_smooth()` using formula = 'y ~ x'
-
-![](Figs/Fig6.png)<!-- -->
+	
+![](Figs/FigS6AB.png)<!-- -->
 
 ``` r
 table(regression_table$V1>0.5)
@@ -1511,12 +1549,12 @@ table(regression_table$V1>0.5)
 ``` r
 # Plot AMR no. of AMR classes detected in the pools and the pangenome of the eight, four, two and one singles
 
-Fig7<-ggplot(classes_per_sample[!classes_per_sample$Pool_ID %in% mismatched_pools_singles_Pool_IDs & !classes_per_sample$Pool_ID %in% multi_st_Pool_IDs,],aes(y=freq_sample,x=freq,fill=freq_sample))+
+Fig7<-ggplot(classes_per_sample[!classes_per_sample$Pool_ID %in% mismatched_pools_singles_Pool_IDs,],aes(y=freq_sample,x=freq,fill=freq_sample))+
   geom_density_ridges(alpha=0.75,jittered_points=T,point_shape="o",position=position_points_jitter(height=0,width=0.1),point_size=4,quantile_lines=TRUE,quantile_fun=function(x,...)median(x))+
-  theme_bw()+
+  theme_bw(base_family = "Arial")+
   scale_fill_manual(limits=c("Pool_freq","eight_freq","four_freq","two_freq","one_freq"),values=c("darkred","salmon","rosybrown3","mistyrose2","white"))+
   scale_y_discrete(labels=c(Pool_freq="Pool",eight_freq="Expected\npool",four_freq="Four\ncolony",two_freq="Two\ncolony",one_freq="One\ncolony"))+
-  scale_x_continuous(breaks=pretty_breaks(n=10))+
+  scale_x_continuous(breaks=pretty_breaks(n=6))+
   theme(legend.position = "none")+
   labs(x="No. of AMR Classes",y="")+
   theme(axis.text.y=element_text(face="bold",color="black",size=16))+
@@ -1524,12 +1562,11 @@ Fig7<-ggplot(classes_per_sample[!classes_per_sample$Pool_ID %in% mismatched_pool
   theme(axis.title.x=element_text(color="black",size=16,face="bold",margin = margin(t=20,r=0,b=0,l=0,unit="pt")))+
   theme(panel.grid.major.x = element_line(color="grey70"))
 
-Fig7
 ```
 
-    ## Picking joint bandwidth of 0.542
-
-![](Figs/Fig7.png)<!-- -->
+    ## Picking joint bandwidth of 0.537
+	
+![](Figs/Fig7.png)<!-- -->	
 
 ### Fig S3 - AMR gene read abundance
 
@@ -1551,14 +1588,14 @@ FigS3<-ggviolin(
   facet_wrap(Class~.,scales="free",nrow=3,ncol=3)+
   stat_pvalue_manual(stat.test, label = "p.adj.signif",label.size = 8,bracket.size = 1,bracket.nudge.y = -4)+
   theme(strip.text = element_text(color="Black",size=16,face="bold"))
-
-
+  
+  
 # MecA gene found in pool but not in any of the 8 singles
 setdiff(unique(na.omit(bactopia_report$Pool_ID[bactopia_report$Sweep=="Pooled" & bactopia_report$meca=="TRUE" & !(bactopia_report$Pool_ID %in% mismatched_pools_singles_Pool_IDs)])),unique(na.omit(bactopia_report$Pool_ID[bactopia_report$Sweep=="Single" & bactopia_report$meca=="TRUE" & !(bactopia_report$Pool_ID %in% mismatched_pools_singles_Pool_IDs)])))
 ```
 
     ## character(0)
-
+	
 ``` r
 FigS3
 ```
@@ -1613,7 +1650,99 @@ Fig8B<-ggplot(data=NULL,aes(x=Group.1,y=x))+
   xlab("Number of sequencing runs")
 
 
-plot_grid(Fig8A,NULL,Fig8B,ncol=1,align = "hv",rel_heights = c(1,-0.12,1),labels=c("A","","B"))
+Fig8AB<-plot_grid(Fig8A,NULL,Fig8B,ncol=1,align = "hv",rel_heights = c(1,-0.12,1),labels=c("A","","B"))
+
+```
+![](Figs/Fig8AB.png)<!-- -->
+
+# Revision 1
+
+### Logistic regression variables
+
+``` r
+y<-snp_dists_all_patients[snp_dists_all_patients$Concordance=="Same site & Same time",c(11,3)] %>% dplyr::group_by(Pool_ID.x) %>% dplyr::summarise_each(funs(.[which.max(abs(.))]))
 ```
 
-![](Figs/Fig8.png)<!-- -->
+``` r
+colnames(y)<-c("Pool_ID","Max SNP distance")
+
+log_reg_table<-merge(log_reg_data[,-1],y,by="Pool_ID")
+
+colnames(log_reg_table)[c(1,3,13)]<-c("Collection_ID","Number of AMR Classes","Multi-ST")
+
+#write.table(log_reg_table,file="Supplemental_dataset_2.csv",quote=F,row.names = F,col.names = T,sep=",")
+```
+
+### Strainge results
+
+``` r
+# Reference
+strainge_ref_mlst<-read.table("references_mlst.tab",header=T,sep="\t")
+
+### Controls
+
+strainge_control_results<-read.table("JE2_N315_strainge_results.tab",header=F,sep="\t",col.names=c("Sample_ID","reference","rel_abundance","confidence","JE2_abundance"))
+strainge_control_results<-merge(strainge_control_results,strainge_ref_mlst[,c(1,3)],by.x="reference",by.y="FILE")
+
+ggplot(data=strainge_control_results)+
+  geom_bar(aes(x=as.factor(JE2_abundance),y=rel_abundance,fill=ST),stat="identity",color="black",width=0.5)+
+  labs(x="JE2 abundance in %",y="Relative abundance of\neach ST")+
+  theme_bw()+
+  scale_fill_manual(values=c("steelblue","cyan"))
+```
+
+![](Figs/Supplemental_StrainGE.png)<!-- -->
+
+### Kraken results
+
+``` r
+kraken_pool_means<-(aggregate(kraken$fraction_total_reads[kraken$name!="Staphylococcus aureus" & kraken$pool_type=="pool" & kraken$Sample_ID %in% semaphore_id_desc$Sample_ID], list(kraken$name[kraken$name!="Staphylococcus aureus" & kraken$pool_type=="pool" & kraken$Sample_ID %in% semaphore_id_desc$Sample_ID]), FUN=mean))
+
+kraken$name[kraken$name!="Staphylococcus aureus" & kraken$name!="Homo sapiens" & kraken$pool_type=="single" & kraken$fraction_total_reads>0.01 & !grepl("phage", kraken$name)] %>%
+    table() %>%
+    as.data.frame() %>%
+    top_n(n=10,Freq) %>%
+    ggplot()+
+    geom_bar(aes(x=reorder(.,-Freq),y=Freq),stat="identity",width=0.5,color="black",fill="grey70")+
+    theme_bw()+
+    scale_x_discrete(labels = function(x) str_wrap(x, width = 10))+
+    theme(axis.text.y=element_text(size=16,color="black"))+
+    theme(axis.text.x=element_text(size=8,color="black",face="bold",angle=45,hjust=1))+
+    ylab("Number of pools")+
+    xlab("")
+```
+![](Figs/Supplemental_Kraken.png)<!-- -->
+
+### Gubbins results
+
+``` r
+# in directory /home/vraghu2/tiramisu/chlamy/vraghu2/semaphore/auto_reference_MAF_test/filtered_semaphore_samples/snp_dist_clustering
+
+#Run command : 
+# ls | xargs -I {} sh -c 'cat ./{}/gubbins_out.per_branch_statistics.csv | grep "$S\." | grep -v "Staph_ASR" | cut -f5 | datamash mean 1'
+
+#Gives average number of recombination events for each branch on a tree with 8 singles, for each collection.
+#Total average no. of recombination events within collections = 0.6 which is < 1. 
+
+gubbins<-read.table("all_gubbins_output.tab",header=T,sep="\t")
+
+gubbins<-merge(gubbins[,c(1,5)],semaphore_id_desc,by.x="Node",by.y="Sample_ID")
+
+gubbins<-merge(gubbins,mlst[,c(1,2,3,13)],by.x="Node",by.y="Sample_ID")
+
+```
+
+``` r
+#Mean no. of recombination events for all collections of singles
+mean(gubbins$Num.of.Recombination.Blocks)
+```
+
+    ## [1] 0.2878937
+
+``` r
+#Mean no. of recombination events for mono-ST collections of singles 
+mean(gubbins$Num.of.Recombination.Blocks[gubbins$mixed_allele=="no"])
+```
+
+    ## [1] 0.01854067
+	
