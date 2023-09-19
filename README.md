@@ -1,7 +1,7 @@
 R code for the Genomic Analysis of Singles and Pools (GASP) project. 
 ================
 ### Raw data
-Raw data can be downloaded from https://doi.org/10.6084/m9.figshare.22766579.v1. 
+Raw data can be downloaded from https://doi.org/10.6084/m9.figshare.24161634.v1. 
 
 ### Manuscript
 The manuscript can be found here: https://www.biorxiv.org/content/10.1101/2023.06.14.544959v1.full
