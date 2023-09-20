@@ -149,7 +149,7 @@ mlst$ST[mlst$ST=="-"]<-"Unknown"
 
 #semaphore_id_desc<-merge(semaphore_id_desc,mlst[,c(1,12)],by="Sample_ID")
 quals<-merge(quals,mlst[,c(1,13)],by.y="Sample_ID",by.x="sample")
-quals$mixed_allele <- factor(quals$mixed_allele, levels = c("no", "yes"),labels = c("Single-ST", "Multi-ST"))
+quals$mixed_allele <- factor(quals$mixed_allele, levels = c("no", "yes"),labels = c("Mono-ST", "Multi-ST"))
 ```
 
 ### Get random list of singles
@@ -877,7 +877,7 @@ Fig3B<-ggplot(data=quals,aes(x=Sweep,y=total_contig,fill=Sweep))+
 
 Fig3C<-ggplot(data=quals,aes(x=checkm_contamination,y=checkm_heterogeneity,fill=Sweep))+
   geom_point(aes(shape=mixed_allele),size=3,color="black",alpha=0.4,stroke=1.5)+
-  scale_shape_manual("",values=c(21,25),labels=c("Multi-ST collection","Single-ST collection"))+
+  scale_shape_manual("",values=c(21,25),labels=c("Mono-ST collection","Multi-ST collection"))+
   scale_fill_manual("",values=c("darkred","white"))+
   theme_bw(base_family = "Arial") + 
   theme(axis.text.x = element_text(angle=45,size = 12,vjust=0.4,color="black"),axis.text.y=element_text(size=16,vjust=0.4)) +
@@ -996,7 +996,7 @@ pd <- position_dodge(0.04)
 Fig4A<-ggplot(data=shared_v_unshared[!shared_v_unshared$Pool_ID %in% mismatched_pools_singles_Pool_IDs,],aes(x=Pools,y=actual_mean_MAF))+
   #geom_point(data=mean_MAF_true_singles,aes(x=snp_freq,y=true_singles_mean_MAF),size=3,color="black",fill="white",alpha=0.4,shape=21)+
   geom_point(aes(size=Pools*actual_mean_MAF,shape=mixed_allele),color="black",fill="darkred",alpha=0.4)+
-  scale_shape_manual("",values=c(21,25),labels=c("Single-ST collection","Multi-ST collection"))+
+  scale_shape_manual("",values=c(21,25),labels=c("Mono-ST collection","Multi-ST collection"))+
   theme_bw()+
   scale_x_continuous(breaks=pretty_breaks(n=10))+
   theme(axis.text.x=element_text(size=16,color="black",angle=45,hjust=1))+
@@ -1012,7 +1012,9 @@ Fig4A<-ggplot(data=shared_v_unshared[!shared_v_unshared$Pool_ID %in% mismatched_
   geom_ysidehistogram(fill="darkred",color="black") +
   theme(ggside.panel.scale = .15)+
   scale_xsidey_continuous(breaks=pretty_breaks(n=2))+
-  scale_ysidex_continuous(breaks=pretty_breaks(n=2))
+  scale_ysidex_continuous(breaks=pretty_breaks(n=2))+ 
+  guides(shape = guide_legend(override.aes = list(size = 5)))+
+  theme(legend.text = element_text(size=12),legend.title=element_text(size=12,face="bold"))
 
 t.test((shared_v_unshared$Pools[shared_v_unshared$Pool_ID %in% multi_st_Pool_IDs]*shared_v_unshared$actual_mean_MAF[shared_v_unshared$Pool_ID %in% multi_st_Pool_IDs]),(shared_v_unshared$Pools[!shared_v_unshared$Pool_ID %in% multi_st_Pool_IDs]*shared_v_unshared$actual_mean_MAF[!shared_v_unshared$Pool_ID %in% multi_st_Pool_IDs]))
 ```
@@ -1079,11 +1081,11 @@ y<-ggplot(data=instrain,aes(y=nucl_diversity,fill=Pool_type))+
   theme(axis.text.y=element_blank())+
   theme(axis.title.y=element_blank())+
   scale_x_continuous(breaks=pretty_breaks(n=2))+
-  #theme(axis.title.x=element_text(size=16,color="black",face="bold"))+
   theme(axis.title.x=element_blank())+
-  #theme(legend.position = c(0.80, 0.75),legend.text=element_text(size=16),legend.key.size = unit(0.8, 'cm'),legend.title = element_blank())+
-  theme(legend.position = "right")
-  #ylim(-0.00015,0.006)
+  theme(legend.position = "right")+
+  guides(fill = guide_legend(override.aes = list(size = 5)))+
+  theme(legend.text = element_text(size=12),legend.title=element_text(size=12,face="bold"))
+
   
 
 Fig4B<-plot_grid(x,y,rel_widths = c(1,0.35),align="hv",axis="bt",nrow=1)
